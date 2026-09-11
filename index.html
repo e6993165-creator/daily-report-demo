@@ -1367,21 +1367,43 @@ function idbOpen(){
     req.onerror = ()=> reject(req.error);
   });
 }
+/* [r08] 記憶體模式：瀏覽器無法使用 IndexedDB（以檔案直接開啟、私密模式、
+   部分手機內建瀏覽器）時不再讓系統啟動失敗，改為只在記憶體中運作——
+   內建的 707 天資料與所有查閱、日報、Dashboard 功能照常，只是手動填寫的
+   內容關閉頁面後不保留。第一次偵測到時顯示一次提示。 */
+let MEMORY_ONLY = false, _memoryNoticeShown = false;
+function idbAvailable(){ try{ return !!window.indexedDB; }catch(_){ return false; } }
+function noteMemoryOnly(err){
+  MEMORY_ONLY = true;
+  if(_memoryNoticeShown) return;
+  _memoryNoticeShown = true;
+  console.warn('[storage] IndexedDB 不可用，改以記憶體模式運作', err);
+  try{
+    showPersistentBanner('ℹ 此瀏覽器無法保存資料（常見於直接開啟 .html 檔或私密模式）。'
+      + '內建日誌資料與查閱功能不受影響；但本次手動填寫的內容在關閉頁面後不會保留。');
+  }catch(_){}
+}
 async function idbGet(key){
-  const conn = await idbOpen();
-  return new Promise((resolve,reject)=>{
-    const tx = conn.transaction("kv","readonly");
-    const r = tx.objectStore("kv").get(key);
-    r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error);
-  });
+  if(MEMORY_ONLY || !idbAvailable()) { noteMemoryOnly('indexedDB 不可用'); return undefined; }
+  try{
+    const conn = await idbOpen();
+    return await new Promise((resolve,reject)=>{
+      const tx = conn.transaction("kv","readonly");
+      const r = tx.objectStore("kv").get(key);
+      r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error);
+    });
+  }catch(err){ noteMemoryOnly(err); return undefined; }
 }
 async function idbSet(key,val){
-  const conn = await idbOpen();
-  return new Promise((resolve,reject)=>{
-    const tx = conn.transaction("kv","readwrite");
-    tx.objectStore("kv").put(val,key);
-    tx.oncomplete=()=>resolve(); tx.onerror=()=>reject(tx.error);
-  });
+  if(MEMORY_ONLY || !idbAvailable()) { noteMemoryOnly('indexedDB 不可用'); return; }
+  try{
+    const conn = await idbOpen();
+    await new Promise((resolve,reject)=>{
+      const tx = conn.transaction("kv","readwrite");
+      tx.objectStore("kv").put(val,key);
+      tx.oncomplete=()=>resolve(); tx.onerror=()=>reject(tx.error);
+    });
+  }catch(err){ noteMemoryOnly(err); }
 }
 
 async function persist(){
