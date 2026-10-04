@@ -1,0 +1,42 @@
+# 複製為 config/config.yaml 後填入實際值。config.yaml 已列入 .gitignore,不會進版。
+# 金鑰一律走環境變數,YAML 裡只放 ${ENV_VAR} 參照。
+
+database:
+  path: data/infogap.db
+
+fetch:
+  interval_minutes: 10
+  user_agent: "infogap-monitor/0.1 (personal research; contact: you@example.com)"
+  timeout_seconds: 20
+  # 每個來源上線前先確認該站 robots.txt 與使用條款允許抓取。
+  # 以下僅為格式範例,不代表這些站台允許你的用途。
+  sources:
+    - name: hn-newest
+      type: rss
+      url: "https://hnrss.org/newest?points=50"
+    - name: example-forum
+      type: json_api
+      url: "https://www.reddit.com/r/frugal/new.json?limit=25"
+      # json_api 需在 api_fetcher.py 的 PARSERS 註冊對應解析函式
+      parser: reddit_listing
+
+analyzer:
+  model: claude-opus-5-5
+  # ANTHROPIC_API_KEY 由環境變數提供,不寫在這裡
+  batch_size: 20          # 每次送給 Claude 的項目數
+  min_score: 60           # 低於此潛力分數的項目不推播
+
+notifier:
+  telegram:
+    enabled: true
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    chat_id: "${TELEGRAM_CHAT_ID}"
+  # LINE Notify 已於 2025-03-31 終止服務,此處為 LINE Messaging API(官方帳號 push)
+  line:
+    enabled: false
+    channel_access_token: "${LINE_CHANNEL_ACCESS_TOKEN}"
+    to_user_id: "${LINE_USER_ID}"
+
+publisher:
+  output_dir: content
+  daily_publish_hour: 8   # 每天幾點彙整前一日高價值項目成文
